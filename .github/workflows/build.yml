@@ -105,6 +105,7 @@ jobs:
             exit 1
           fi
           TAG="${GITHUB_REF_NAME}"
+          git fetch --force origin "refs/tags/$TAG:refs/tags/$TAG"
           SRC_APK="app/build/outputs/apk/release/app-release.apk"
           OUT_APK="$RUNNER_TEMP/HyperOS-Shade-Blend-Controller-${TAG}.apk"
           cp "$SRC_APK" "$OUT_APK"
