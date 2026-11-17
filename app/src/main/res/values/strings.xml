@@ -1,4 +1,4 @@
 <resources>
     <string name="app_name">柔光暗度控制</string>
-    <string name="module_description">HyperOS 4 下拉控制中心与通知中心背景压暗调控模块（支持统一或分别调节暗度，适配 libxposed API 102）</string>
+    <string name="module_description">HyperOS 4 下拉控制中心与通知中心背景压暗调控模块（采用原厂整体缩放策略统一调节背景暗度，适配 libxposed API 102）</string>
 </resources>

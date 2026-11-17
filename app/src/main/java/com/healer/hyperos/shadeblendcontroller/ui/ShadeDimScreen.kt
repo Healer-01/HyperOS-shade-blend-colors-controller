@@ -3,7 +3,10 @@ package com.healer.hyperos.shadeblendcontroller.ui
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
 import android.widget.Toast
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -11,6 +14,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,151 +23,163 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedButton
-import androidx.compose.material3.SegmentedButtonDefaults
-import androidx.compose.material3.SingleChoiceSegmentedButtonRow
-import androidx.compose.material3.Slider
-import androidx.compose.material3.Switch
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.PathNode
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.healer.hyperos.shadeblendcontroller.hook.ShadeBlendModuleEntry
-import com.healer.hyperos.shadeblendcontroller.policy.ControlMode
-import com.healer.hyperos.shadeblendcontroller.policy.DimSettings
-import com.healer.hyperos.shadeblendcontroller.policy.DimStrategy
 import com.healer.hyperos.shadeblendcontroller.policy.ShadeDimPolicy
-import com.healer.hyperos.shadeblendcontroller.policy.SingleEntryTarget
+import kotlin.math.PI
+import kotlin.math.cos
 import kotlin.math.roundToInt
+import kotlin.math.sin
+import top.yukonga.miuix.kmp.basic.ButtonDefaults
+import top.yukonga.miuix.kmp.basic.Card
+import top.yukonga.miuix.kmp.basic.HorizontalDivider
+import top.yukonga.miuix.kmp.basic.Icon
+import top.yukonga.miuix.kmp.basic.MiuixScrollBehavior
+import top.yukonga.miuix.kmp.basic.Scaffold
+import top.yukonga.miuix.kmp.basic.Slider
+import top.yukonga.miuix.kmp.basic.SmallTitle
+import top.yukonga.miuix.kmp.basic.Surface
+import top.yukonga.miuix.kmp.basic.Text
+import top.yukonga.miuix.kmp.basic.TextButton
+import top.yukonga.miuix.kmp.basic.TopAppBar
+import top.yukonga.miuix.kmp.extra.SuperArrow
+import top.yukonga.miuix.kmp.extra.SuperDialog
+import top.yukonga.miuix.kmp.extra.SuperSwitch
+import top.yukonga.miuix.kmp.icon.MiuixIcons
+import top.yukonga.miuix.kmp.icon.extended.Copy
+import top.yukonga.miuix.kmp.theme.MiuixTheme
+import top.yukonga.miuix.kmp.utils.scrollEndHaptic
 
 private const val DUMPSYS_COMMAND =
     "adb shell dumpsys activity service com.android.systemui/.SystemUIService ShadeBlendBlurControllerImpl"
+private const val PROJECT_HOMEPAGE_URL =
+    "https://github.com/Healer-01/HyperOS-shade-blend-colors-controller"
+private const val MIUIX_PROJECT_URL =
+    "https://github.com/compose-miuix-ui/miuix"
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShadeDimScreen() {
     val settings by SettingsRepository.settings.collectAsState()
     val framework by SettingsRepository.framework.collectAsState()
     val context = LocalContext.current
+    val topAppBarScrollBehavior = MiuixScrollBehavior()
+    var showLicenseDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = {
-                    Column {
-                        Text(
-                            text = "HyperOS 柔光暗度控制",
-                            style = MaterialTheme.typography.titleLarge,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                        Text(
-                            text = "下拉控制中心与通知中心背景压暗调节",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                },
+                title = "柔光暗度控制",
+                scrollBehavior = topAppBarScrollBehavior,
             )
         },
     ) { innerPadding ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+                .scrollEndHaptic()
+                .nestedScroll(topAppBarScrollBehavior.nestedScrollConnection),
+            contentPadding = PaddingValues(
+                top = innerPadding.calculateTopPadding() + 8.dp,
+                bottom = innerPadding.calculateBottomPadding() + 24.dp,
+            ),
         ) {
-            ModuleStatusCard(framework = framework)
+            item(key = "status") {
+                SmallTitle(text = "模块状态")
+                ModuleStatusCard(framework = framework)
+            }
 
-            MasterControlCard(
-                settings = settings,
-                onToggleEnabled = { checked ->
-                    SettingsRepository.update { it.copy(enabled = checked) }
-                },
-                onControlModeChange = { mode ->
-                    SettingsRepository.update { it.copy(controlMode = mode) }
-                },
-                onStrategyChange = { strategy ->
-                    SettingsRepository.update { it.copy(dimStrategy = strategy) }
-                },
-                onSingleEntryTargetChange = { target ->
-                    SettingsRepository.update { it.copy(singleEntryTarget = target) }
-                },
-            )
-
-            if (settings.controlMode == ControlMode.UNIFIED) {
-                DimSliderCard(
-                    title = "统一背景暗度",
-                    subtitle = "同时作用于下拉控制中心、通知中心及合二为一背景",
-                    percent = settings.unifiedDimPercent,
-                    strategy = settings.dimStrategy,
-                    singleEntryTarget = settings.singleEntryTarget,
+            item(key = "dim_control") {
+                Spacer(modifier = Modifier.height(10.dp))
+                SmallTitle(text = "背景暗度调节")
+                UnifiedDimControlCard(
                     enabled = settings.enabled,
-                    onPercentChange = { value ->
-                        SettingsRepository.update { it.copy(unifiedDimPercent = value) }
+                    dimPercent = settings.dimPercent,
+                    onToggleEnabled = { checked ->
+                        SettingsRepository.update { it.copy(enabled = checked) }
                     },
-                )
-            } else {
-                DimSliderCard(
-                    title = "控制中心背景暗度",
-                    subtitle = "右侧下拉控制中心独立压暗（0% 最通透，100% 纯黑）",
-                    percent = settings.controlCenterDimPercent,
-                    strategy = settings.dimStrategy,
-                    singleEntryTarget = settings.singleEntryTarget,
-                    enabled = settings.enabled,
-                    onPercentChange = { value ->
-                        SettingsRepository.update { it.copy(controlCenterDimPercent = value) }
-                    },
-                )
-                DimSliderCard(
-                    title = "通知中心背景暗度",
-                    subtitle = "左侧下拉通知中心独立压暗（0% 最通透，100% 纯黑）",
-                    percent = settings.notificationShadeDimPercent,
-                    strategy = settings.dimStrategy,
-                    singleEntryTarget = settings.singleEntryTarget,
-                    enabled = settings.enabled,
-                    onPercentChange = { value ->
-                        SettingsRepository.update { it.copy(notificationShadeDimPercent = value) }
+                    onDimPercentChange = { value ->
+                        SettingsRepository.update { it.copy(dimPercent = value) }
                     },
                 )
             }
 
-            DiagnosticsCard(
-                onCopyCommand = {
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    clipboard.setPrimaryClip(ClipData.newPlainText("dumpsys", DUMPSYS_COMMAND))
-                    Toast.makeText(context, "已复制只读诊断命令", Toast.LENGTH_SHORT).show()
-                },
-            )
+            item(key = "diagnostics") {
+                Spacer(modifier = Modifier.height(10.dp))
+                SmallTitle(text = "作用域与诊断")
+                DiagnosticsCard(
+                    onCopyCommand = {
+                        val clipboard =
+                            context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        clipboard.setPrimaryClip(ClipData.newPlainText("dumpsys", DUMPSYS_COMMAND))
+                        Toast.makeText(context, "已复制只读诊断命令", Toast.LENGTH_SHORT).show()
+                    },
+                )
+            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            item(key = "about_module") {
+                Spacer(modifier = Modifier.height(10.dp))
+                SmallTitle(text = "关于模块")
+                AboutModuleCard(
+                    onOpenHomepage = {
+                        openExternalUrl(context, PROJECT_HOMEPAGE_URL)
+                    },
+                )
+            }
+
+            item(key = "credits") {
+                Spacer(modifier = Modifier.height(10.dp))
+                SmallTitle(text = "引用")
+                CreditsCard(
+                    onOpenMiuix = {
+                        openExternalUrl(context, MIUIX_PROJECT_URL)
+                    },
+                    onShowLicenses = {
+                        showLicenseDialog = true
+                    },
+                )
+            }
+        }
+
+        SuperDialog(
+            show = showLicenseDialog,
+            title = "开源许可",
+            summary = "本模块使用并感谢以下遵循 Apache-2.0 协议的开源组件：\n" +
+                "• miuix-kotlin-multiplatform (Apache-2.0)\n" +
+                "• libxposed API & Service (Apache-2.0)",
+            onDismissRequest = { showLicenseDialog = false },
+        ) {
+            TextButton(
+                text = "关闭",
+                onClick = { showLicenseDialog = false },
+                modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.textButtonColorsPrimary(),
+            )
         }
     }
 }
@@ -171,26 +187,12 @@ fun ShadeDimScreen() {
 @Composable
 private fun ModuleStatusCard(framework: FrameworkSnapshot) {
     val active = framework.apiCompatible && framework.systemUiInScope
-    val containerColor = when {
-        active -> MaterialTheme.colorScheme.primaryContainer
-        framework.connected -> MaterialTheme.colorScheme.tertiaryContainer
-        else -> MaterialTheme.colorScheme.surfaceVariant
-    }
-    val contentColor = when {
-        active -> MaterialTheme.colorScheme.onPrimaryContainer
-        framework.connected -> MaterialTheme.colorScheme.onTertiaryContainer
-        else -> MaterialTheme.colorScheme.onSurfaceVariant
-    }
 
-    Card(
-        colors = CardDefaults.cardColors(
-            containerColor = containerColor,
-            contentColor = contentColor,
-        ),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
+    Card(modifier = Modifier.padding(horizontal = 12.dp)) {
         Column(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Row(
@@ -205,7 +207,7 @@ private fun ModuleStatusCard(framework: FrameworkSnapshot) {
                             when {
                                 active -> Color(0xFF2E7D32)
                                 framework.connected -> Color(0xFFEF6C00)
-                                else -> Color(0xFF757575)
+                                else -> MiuixTheme.colorScheme.disabledOnSurface
                             },
                         ),
                 )
@@ -215,8 +217,9 @@ private fun ModuleStatusCard(framework: FrameworkSnapshot) {
                         framework.connected -> "LSPosed 已连接，但作用域未完整启用"
                         else -> "未检测到 LSPosed 服务（当前为离线预览）"
                     },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    style = MiuixTheme.textStyles.headline1,
+                    fontWeight = FontWeight.Medium,
+                    color = MiuixTheme.colorScheme.onSurface,
                 )
             }
 
@@ -225,7 +228,11 @@ private fun ModuleStatusCard(framework: FrameworkSnapshot) {
             } else {
                 "请在 LSPosed 管理器启用本模块（要求 libxposed API >= ${FrameworkSnapshot.MIN_SUPPORTED_API}）并勾选系统界面"
             }
-            Text(text = details, style = MaterialTheme.typography.bodySmall)
+            Text(
+                text = details,
+                style = MiuixTheme.textStyles.body2,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+            )
 
             if (framework.connected) {
                 Text(
@@ -233,197 +240,27 @@ private fun ModuleStatusCard(framework: FrameworkSnapshot) {
                         "${if (framework.systemUiInScope) "✓" else "✗"}  |  " +
                         "${ShadeBlendModuleEntry.PKG_SYSTEM_UI_PLUGIN} " +
                         "${if (framework.pluginInScope) "✓" else "○"}",
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MiuixTheme.textStyles.footnote1,
                     fontFamily = FontFamily.Monospace,
+                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                 )
             }
 
             if (framework.statusMessage.isNotBlank()) {
                 Text(
                     text = framework.statusMessage,
-                    style = MaterialTheme.typography.bodySmall,
+                    style = MiuixTheme.textStyles.body2,
+                    color = MiuixTheme.colorScheme.primary,
                 )
             }
 
             if (framework.connected && (!framework.systemUiInScope || !framework.pluginInScope)) {
-                Button(
+                Spacer(modifier = Modifier.height(2.dp))
+                TextButton(
+                    text = "向 LSPosed 申请所需作用域",
                     onClick = { SettingsRepository.requestMissingScope() },
-                    modifier = Modifier.padding(top = 4.dp),
-                ) {
-                    Text("向 LSPosed 申请所需作用域")
-                }
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun MasterControlCard(
-    settings: DimSettings,
-    onToggleEnabled: (Boolean) -> Unit,
-    onControlModeChange: (ControlMode) -> Unit,
-    onStrategyChange: (DimStrategy) -> Unit,
-    onSingleEntryTargetChange: (SingleEntryTarget) -> Unit,
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "启用背景压暗调节",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium,
-                    )
-                    Text(
-                        text = "关闭后立即还原 HyperOS 系统默认压暗效果",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Spacer(modifier = Modifier.width(12.dp))
-                Switch(
-                    checked = settings.enabled,
-                    onCheckedChange = onToggleEnabled,
-                )
-            }
-
-            HorizontalDivider()
-
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "面板控制模式",
-                    style = MaterialTheme.typography.labelLarge,
-                )
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    SegmentedButton(
-                        selected = settings.controlMode == ControlMode.UNIFIED,
-                        onClick = { onControlModeChange(ControlMode.UNIFIED) },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                        enabled = settings.enabled,
-                    ) {
-                        Text("统一控制")
-                    }
-                    SegmentedButton(
-                        selected = settings.controlMode == ControlMode.SEPARATE,
-                        onClick = { onControlModeChange(ControlMode.SEPARATE) },
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                        enabled = settings.enabled,
-                    ) {
-                        Text("分别控制")
-                    }
-                }
-            }
-
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    text = "底层混色策略",
-                    style = MaterialTheme.typography.labelLarge,
-                )
-                SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                    SegmentedButton(
-                        selected = settings.dimStrategy == DimStrategy.LINEAR_SCRIM,
-                        onClick = { onStrategyChange(DimStrategy.LINEAR_SCRIM) },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
-                        enabled = settings.enabled,
-                    ) {
-                        Text(
-                            text = "线性遮罩",
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    SegmentedButton(
-                        selected = settings.dimStrategy == DimStrategy.SCALE_STOCK_ALPHA,
-                        onClick = { onStrategyChange(DimStrategy.SCALE_STOCK_ALPHA) },
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
-                        enabled = settings.enabled,
-                    ) {
-                        Text(
-                            text = "整体缩放",
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    SegmentedButton(
-                        selected = settings.dimStrategy == DimStrategy.SINGLE_STOCK_ENTRY,
-                        onClick = { onStrategyChange(DimStrategy.SINGLE_STOCK_ENTRY) },
-                        shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
-                        enabled = settings.enabled,
-                    ) {
-                        Text(
-                            text = "原厂单项",
-                            style = MaterialTheme.typography.labelMedium,
-                            maxLines = 1,
-                            softWrap = false,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                }
-
-                if (settings.dimStrategy == DimStrategy.SINGLE_STOCK_ENTRY) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = "选择要调低的原厂单项",
-                        style = MaterialTheme.typography.labelMedium,
-                    )
-                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-                        SegmentedButton(
-                            selected = settings.singleEntryTarget == SingleEntryTarget.BIONICS_LIGHTNESS_106,
-                            onClick = { onSingleEntryTargetChange(SingleEntryTarget.BIONICS_LIGHTNESS_106) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
-                            enabled = settings.enabled,
-                        ) {
-                            Text(
-                                text = "亮度层 106",
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                        SegmentedButton(
-                            selected = settings.singleEntryTarget == SingleEntryTarget.BIONICS_TINT_21,
-                            onClick = { onSingleEntryTargetChange(SingleEntryTarget.BIONICS_TINT_21) },
-                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
-                            enabled = settings.enabled,
-                        ) {
-                            Text(
-                                text = "灰阶层 21",
-                                style = MaterialTheme.typography.labelMedium,
-                                maxLines = 1,
-                                softWrap = false,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
-                    }
-                }
-
-                Text(
-                    text = when (settings.dimStrategy) {
-                        DimStrategy.LINEAR_SCRIM ->
-                            "移除原厂 mode 106 Lab 亮度压缩，改用线性 SrcOver 黑遮罩，0% 时背景完全通透不发灰。"
-                        DimStrategy.SCALE_STOCK_ALPHA ->
-                            "保留原厂 shade_blend_colors_bionics (21/106) 或经典 (28) 混合模式，按百分比同步缩放所有色层 Alpha。"
-                        DimStrategy.SINGLE_STOCK_ENTRY -> if (settings.singleEntryTarget == SingleEntryTarget.BIONICS_LIGHTNESS_106) {
-                            "保留原厂第 1 项 #FF999999 (mode 21) 不变，仅调低第 2 项 #XX0D8000 (mode 106) 的压暗强度，最小改动让背景变亮。"
-                        } else {
-                            "保留原厂第 2 项 #FF0D8000 (mode 106) 不变，仅调低第 1 项 #XX999999 (mode 21) 的灰阶叠色透明度。"
-                        }
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.textButtonColorsPrimary(),
                 )
             }
         }
@@ -432,69 +269,76 @@ private fun MasterControlCard(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun DimSliderCard(
-    title: String,
-    subtitle: String,
-    percent: Float,
-    strategy: DimStrategy,
-    singleEntryTarget: SingleEntryTarget,
+private fun UnifiedDimControlCard(
     enabled: Boolean,
-    onPercentChange: (Float) -> Unit,
+    dimPercent: Float,
+    onToggleEnabled: (Boolean) -> Unit,
+    onDimPercentChange: (Float) -> Unit,
 ) {
-    val rounded = percent.roundToInt()
+    val normalized = ShadeDimPolicy.normalizePercent(dimPercent)
+    val rounded = normalized.roundToInt()
     val previewRecipe = ShadeDimPolicy.buildBlendColors(
         original = ShadeDimPolicy.STOCK_BIONICS_BLEND_COLORS,
-        dimPercent = percent,
-        strategy = strategy,
-        singleEntryTarget = singleEntryTarget,
+        dimPercent = normalized,
     )
-    val scrimAlpha = ((ShadeDimPolicy.blackScrimColor(percent) ushr 24) and 0xFF) / 255f
-    val previewOverlayAlpha = when (strategy) {
-        DimStrategy.LINEAR_SCRIM -> scrimAlpha
-        DimStrategy.SCALE_STOCK_ALPHA -> scrimAlpha * 0.75f
-        DimStrategy.SINGLE_STOCK_ENTRY -> 0.18f + scrimAlpha * 0.55f
-    }
+    val previewOverlayAlpha = 0.78f * (normalized / 100f)
 
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(modifier = Modifier.padding(horizontal = 12.dp)) {
+        SuperSwitch(
+            checked = enabled,
+            onCheckedChange = onToggleEnabled,
+            title = "启用背景压暗调节",
+            summary = "关闭后立即还原 HyperOS 系统默认压暗效果",
+        )
+
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column(modifier = Modifier.weight(1f)) {
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(end = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                ) {
                     Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
+                        text = "统一背景暗度",
+                        style = MiuixTheme.textStyles.headline1,
                         fontWeight = FontWeight.Medium,
+                        color = MiuixTheme.colorScheme.onSurface,
                     )
                     Text(
-                        text = subtitle,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = "采用原厂整体缩放策略，统一作用于控制中心与通知中心背景",
+                        style = MiuixTheme.textStyles.body2,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
                 }
                 Text(
                     text = "$rounded%",
-                    style = MaterialTheme.typography.titleLarge,
+                    style = MiuixTheme.textStyles.title3,
                     fontWeight = FontWeight.Bold,
                     color = if (enabled) {
-                        MaterialTheme.colorScheme.primary
+                        MiuixTheme.colorScheme.primary
                     } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
+                        MiuixTheme.colorScheme.disabledOnSurface
                     },
                 )
             }
 
-            // Visual preview bar simulating wallpaper + current dim overlay
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 44.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .heightIn(min = 48.dp)
+                    .clip(RoundedCornerShape(12.dp))
                     .background(
                         Brush.horizontalGradient(
                             listOf(
@@ -505,54 +349,80 @@ private fun DimSliderCard(
                         ),
                     )
                     .border(
-                        width = 1.dp,
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                        shape = RoundedCornerShape(8.dp),
+                        width = 0.75.dp,
+                        color = MiuixTheme.colorScheme.outline,
+                        shape = RoundedCornerShape(12.dp),
                     ),
                 contentAlignment = Alignment.Center,
             ) {
                 Box(
                     modifier = Modifier
                         .matchParentSize()
-                        .background(Color.Black.copy(alpha = if (enabled) previewOverlayAlpha else 0.5f)),
+                        .background(
+                            Color.Black.copy(alpha = if (enabled) previewOverlayAlpha else 0.5f),
+                        ),
                 )
                 Text(
-                    text = if (enabled) "等效配方：${ShadeDimPolicy.formatRecipeHex(previewRecipe)}" else "已关闭（系统默认）",
-                    style = MaterialTheme.typography.labelSmall,
+                    text = if (enabled) {
+                        "等效配方：${ShadeDimPolicy.formatRecipeHex(previewRecipe)}"
+                    } else {
+                        "已关闭（系统默认）"
+                    },
+                    style = MiuixTheme.textStyles.footnote2,
                     fontFamily = FontFamily.Monospace,
                     color = Color.White,
                     textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
                 )
             }
 
             Slider(
-                value = percent,
-                onValueChange = { onPercentChange(it.roundToInt().toFloat()) },
+                value = normalized,
+                onValueChange = { onDimPercentChange(it.roundToInt().toFloat()) },
                 valueRange = 0f..100f,
                 enabled = enabled,
+                modifier = Modifier.fillMaxWidth(),
             )
 
-            val presets = listOf(0, 15, 30, 50, 80, 100)
+            val presets = listOf(0, 15, 20, 30, 50, 80, 100)
             FlowRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 presets.forEach { preset ->
-                    FilterChip(
-                        selected = rounded == preset,
-                        onClick = { onPercentChange(preset.toFloat()) },
+                    val selected = rounded == preset
+                    val containerColor = when {
+                        !enabled && selected -> MiuixTheme.colorScheme.disabledPrimary
+                        !enabled -> MiuixTheme.colorScheme.disabledSecondaryVariant
+                        selected -> MiuixTheme.colorScheme.primary
+                        else -> MiuixTheme.colorScheme.secondaryVariant
+                    }
+                    val labelColor = when {
+                        !enabled && selected -> MiuixTheme.colorScheme.disabledOnPrimary
+                        !enabled -> MiuixTheme.colorScheme.disabledOnSecondaryVariant
+                        selected -> MiuixTheme.colorScheme.onPrimary
+                        else -> MiuixTheme.colorScheme.onSecondaryVariant
+                    }
+                    Surface(
+                        onClick = { onDimPercentChange(preset.toFloat()) },
                         enabled = enabled,
-                        label = {
-                            Text(
-                                text = when (preset) {
-                                    0 -> "0% 全透"
-                                    100 -> "100% 纯黑"
-                                    else -> "$preset%"
-                                },
-                            )
-                        },
-                    )
+                        shape = RoundedCornerShape(50),
+                        color = containerColor,
+                        contentColor = labelColor,
+                    ) {
+                        Text(
+                            text = when (preset) {
+                                0 -> "0% 全透"
+                                20 -> "20% 默认"
+                                100 -> "100% 原厂"
+                                else -> "$preset%"
+                            },
+                            style = MiuixTheme.textStyles.footnote1,
+                            fontWeight = if (selected) FontWeight.Medium else FontWeight.Normal,
+                            color = labelColor,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        )
+                    }
                 }
             }
         }
@@ -561,39 +431,197 @@ private fun DimSliderCard(
 
 @Composable
 private fun DiagnosticsCard(onCopyCommand: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(modifier = Modifier.padding(horizontal = 12.dp)) {
         Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             Text(
-                text = "作用域与只读验证说明",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Medium,
-            )
-            Text(
                 text = "• 核心作用域：com.android.systemui（控制 ShadeBlendBlurControllerImpl 与 ShadeWindowBlurControllerImpl）\n" +
-                    "• 补充作用域：miui.systemui.plugin（控制中心组件插件，用于辅助状态识别与兼容声明）\n" +
-                    "• 修改参数后通过 RemotePreferences 实时推送，无需重启系统界面即可生效。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    "• 补充作用域：miui.systemui.plugin（用于完整作用域识别与兼容声明）\n" +
+                    "• 修改暗度后通过 RemotePreferences 实时生效，无需重启系统界面。",
+                style = MiuixTheme.textStyles.body2,
+                lineHeight = 20.sp,
+                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             )
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-                    .padding(10.dp),
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(MiuixTheme.colorScheme.surface)
+                    .padding(12.dp),
             ) {
                 Text(
                     text = DUMPSYS_COMMAND,
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MiuixTheme.textStyles.footnote1,
                     fontFamily = FontFamily.Monospace,
+                    color = MiuixTheme.colorScheme.onSurface,
                 )
             }
-            OutlinedButton(onClick = onCopyCommand) {
-                Text("复制只读 ADB 状态检查命令")
-            }
         }
+
+        HorizontalDivider(modifier = Modifier.padding(horizontal = 16.dp))
+
+        SuperArrow(
+            title = "复制只读 ADB 状态检查命令",
+            summary = "查看 ShadeBlendBlurControllerImpl 注入状态",
+            startAction = {
+                Icon(
+                    imageVector = MiuixIcons.Copy,
+                    contentDescription = null,
+                    tint = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .size(22.dp),
+                )
+            },
+            onClick = onCopyCommand,
+        )
+    }
+}
+
+@Composable
+private fun AboutModuleCard(onOpenHomepage: () -> Unit) {
+    Card(modifier = Modifier.padding(horizontal = 12.dp)) {
+        Text(
+            text = "HyperOS 柔光暗度控制是一个基于 libxposed API 102 的 HyperOS 4 系统界面美化模块。" +
+                "采用原厂混色配方整体缩放策略，为下拉控制中心与通知中心提供统一、通透且可实时调节的背景压暗视觉体验。",
+            style = MiuixTheme.textStyles.body1,
+            lineHeight = 24.sp,
+            color = MiuixTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 6.dp),
+        )
+
+        SuperArrow(
+            title = "项目主页",
+            summary = "Healer-01/HyperOS-shade-blend-colors-controller",
+            startAction = {
+                Icon(
+                    imageVector = GitHubIcon,
+                    contentDescription = null,
+                    tint = MiuixTheme.colorScheme.onSurface,
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .size(24.dp),
+                )
+            },
+            onClick = onOpenHomepage,
+        )
+    }
+}
+
+@Composable
+private fun CreditsCard(
+    onOpenMiuix: () -> Unit,
+    onShowLicenses: () -> Unit,
+) {
+    Card(modifier = Modifier.padding(horizontal = 12.dp)) {
+        SuperArrow(
+            title = "本项目使用MiuiX UI组件构建",
+            summary = "miuix-kotlin-multiplatform(Apache-2.0)",
+            startAction = {
+                MiuixHexagonIcon(
+                    modifier = Modifier
+                        .padding(end = 8.dp)
+                        .size(26.dp),
+                )
+            },
+            onClick = onOpenMiuix,
+        )
+
+        SuperArrow(
+            title = "开源许可",
+            onClick = onShowLicenses,
+        )
+    }
+}
+
+@Composable
+private fun MiuixHexagonIcon(modifier: Modifier = Modifier) {
+    Canvas(modifier = modifier) {
+        val cx = size.width / 2f
+        val cy = size.height / 2f
+        val outerR = size.minDimension * 0.45f
+        val ringR = size.minDimension * 0.25f
+        val innerR = size.minDimension * 0.11f
+
+        fun hexagonPath(radius: Float): Path {
+            val path = Path()
+            for (i in 0 until 6) {
+                val angle = (-90.0 + i * 60.0) * PI / 180.0
+                val x = cx + (radius * cos(angle)).toFloat()
+                val y = cy + (radius * sin(angle)).toFloat()
+                if (i == 0) path.moveTo(x, y) else path.lineTo(x, y)
+            }
+            path.close()
+            return path
+        }
+
+        drawPath(
+            path = hexagonPath(outerR),
+            color = Color(0xFF2B67F6),
+        )
+        drawPath(
+            path = hexagonPath(ringR),
+            color = Color.White,
+            style = Stroke(width = size.minDimension * 0.11f),
+        )
+        drawPath(
+            path = hexagonPath(innerR),
+            color = Color.White,
+        )
+    }
+}
+
+private val GitHubIcon: ImageVector by lazy {
+    ImageVector.Builder(
+        name = "GitHub",
+        defaultWidth = 24.dp,
+        defaultHeight = 24.dp,
+        viewportWidth = 24f,
+        viewportHeight = 24f,
+    ).addPath(
+        pathData = listOf(
+            PathNode.MoveTo(12.0f, 1.27f),
+            PathNode.ArcTo(11.0f, 11.0f, 0.0f, false, false, 8.52f, 22.73f),
+            PathNode.CurveTo(9.07f, 22.82f, 9.25f, 22.49f, 9.25f, 22.2f),
+            PathNode.VerticalTo(20.35f),
+            PathNode.CurveTo(6.22f, 21.01f, 5.58f, 18.9f, 5.58f, 18.9f),
+            PathNode.CurveTo(5.08f, 17.64f, 4.37f, 17.3f, 4.37f, 17.3f),
+            PathNode.CurveTo(3.38f, 16.63f, 4.44f, 16.64f, 4.44f, 16.64f),
+            PathNode.CurveTo(5.54f, 16.71f, 6.11f, 17.76f, 6.11f, 17.76f),
+            PathNode.CurveTo(7.08f, 19.42f, 8.65f, 18.94f, 9.27f, 18.66f),
+            PathNode.CurveTo(9.37f, 17.96f, 9.65f, 17.48f, 9.96f, 17.21f),
+            PathNode.CurveTo(7.54f, 16.94f, 5.0f, 16.01f, 5.0f, 11.83f),
+            PathNode.CurveTo(5.0f, 10.64f, 5.42f, 9.67f, 6.12f, 8.91f),
+            PathNode.CurveTo(6.01f, 8.63f, 5.63f, 7.51f, 6.23f, 6.03f),
+            PathNode.CurveTo(6.23f, 6.03f, 7.14f, 5.74f, 9.22f, 7.15f),
+            PathNode.CurveTo(10.09f, 6.91f, 11.02f, 6.79f, 11.94f, 6.79f),
+            PathNode.CurveTo(12.86f, 6.79f, 13.79f, 6.91f, 14.66f, 7.15f),
+            PathNode.CurveTo(16.74f, 5.74f, 17.65f, 6.03f, 17.65f, 6.03f),
+            PathNode.CurveTo(18.25f, 7.51f, 17.87f, 8.63f, 17.76f, 8.91f),
+            PathNode.CurveTo(18.46f, 9.67f, 18.88f, 10.64f, 18.88f, 11.83f),
+            PathNode.CurveTo(18.88f, 16.02f, 16.34f, 16.94f, 13.91f, 17.2f),
+            PathNode.CurveTo(14.3f, 17.54f, 14.65f, 18.21f, 14.65f, 19.24f),
+            PathNode.VerticalTo(22.26f),
+            PathNode.CurveTo(14.65f, 22.55f, 14.83f, 22.88f, 15.39f, 22.78f),
+            PathNode.ArcTo(11.0f, 11.0f, 0.0f, false, false, 12.0f, 1.27f),
+            PathNode.Close,
+        ),
+        pathFillType = PathFillType.EvenOdd,
+        fill = SolidColor(Color.Black),
+    ).build()
+}
+
+private fun openExternalUrl(context: Context, url: String) {
+    runCatching {
+        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    }.onFailure {
+        Toast.makeText(context, "无法打开链接：$url", Toast.LENGTH_SHORT).show()
     }
 }

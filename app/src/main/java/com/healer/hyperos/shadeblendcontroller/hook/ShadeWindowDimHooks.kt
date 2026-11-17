@@ -2,7 +2,6 @@ package com.healer.hyperos.shadeblendcontroller.hook
 
 import android.util.Log
 import android.view.View
-import com.healer.hyperos.shadeblendcontroller.policy.PanelRole
 import com.healer.hyperos.shadeblendcontroller.policy.ShadeDimPolicy
 import io.github.libxposed.api.XposedInterface
 import io.github.libxposed.api.XposedModule
@@ -96,11 +95,7 @@ internal object ShadeWindowDimHooks {
                     val baseAlpha = runCatching {
                         view.context.getColor(colorId) ushr 24
                     }.getOrDefault(0x66)
-                    val dimPercent = ShadeDimPolicy.resolveDimPercent(
-                        settings = settings,
-                        role = PanelRole.COMBINED_WINDOW,
-                        panelState = ActivePanelTracker.state,
-                    )
+                    val dimPercent = ShadeDimPolicy.normalizePercent(settings.dimPercent)
                     val adjusted = ShadeDimPolicy.computeWindowDimColor(
                         originalColor = stockColor,
                         stockMaxAlpha = baseAlpha,
@@ -119,11 +114,7 @@ internal object ShadeWindowDimHooks {
                         val owner = chain.thisObject ?: return@intercept chain.proceed()
                         val savedAlpha = dimAlphaField.getInt(owner)
                         val savedRgb = dimRgbField.getInt(owner)
-                        val dimPercent = ShadeDimPolicy.resolveDimPercent(
-                            settings = settings,
-                            role = PanelRole.COMBINED_WINDOW,
-                            panelState = ActivePanelTracker.state,
-                        )
+                        val dimPercent = ShadeDimPolicy.normalizePercent(settings.dimPercent)
                         try {
                             dimAlphaField.setInt(
                                 owner,

@@ -75,14 +75,6 @@ internal object ShadeBackdropHooks {
     fun install(module: XposedModule, loader: ClassLoader) {
         if (listenersRegistered.compareAndSet(false, true)) {
             RuntimeSettingsHolder.addChangeListener { refreshAllOwners() }
-            ActivePanelTracker.addListener {
-                if (RuntimeSettingsHolder.current.enabled &&
-                    RuntimeSettingsHolder.current.controlMode ==
-                    com.healer.hyperos.shadeblendcontroller.policy.ControlMode.SEPARATE
-                ) {
-                    refreshRole(PanelRole.COMBINED_WINDOW)
-                }
-            }
         }
 
         if (installed.get()) return
@@ -168,16 +160,10 @@ internal object ShadeBackdropHooks {
                             return@intercept chain.proceed()
                         }
 
-                        val dimPercent = ShadeDimPolicy.resolveDimPercent(
-                            settings = settings,
-                            role = role,
-                            panelState = ActivePanelTracker.state,
-                        )
+                        val dimPercent = ShadeDimPolicy.normalizePercent(settings.dimPercent)
                         val customColors = ShadeDimPolicy.buildBlendColors(
                             original = originalColors,
                             dimPercent = dimPercent,
-                            strategy = settings.dimStrategy,
-                            singleEntryTarget = settings.singleEntryTarget,
                         )
 
                         compatCalls.incrementAndGet()
@@ -240,16 +226,10 @@ internal object ShadeBackdropHooks {
                         val result = chain.proceed()
                         val out = chain.getArg(0) as? PrintWriter ?: return@intercept result
                         val settings = RuntimeSettingsHolder.current
-                        val panel = ActivePanelTracker.state
                         out.println(
                             "  ShadeBlendController: enabled=${settings.enabled}" +
-                                ", mode=${settings.controlMode}" +
-                                ", strategy=${settings.dimStrategy}" +
-                                ", singleEntry=${settings.singleEntryTarget}" +
-                                ", unified=${settings.unifiedDimPercent}%" +
-                                ", cc=${settings.controlCenterDimPercent}%" +
-                                ", notif=${settings.notificationShadeDimPercent}%" +
-                                ", activePanel=$panel" +
+                                ", strategy=SCALE_STOCK_ALPHA" +
+                                ", dimPercent=${settings.dimPercent}%" +
                                 ", compatCalls=${compatCalls.get()}" +
                                 ", finalCalls=${finalCalls.get()}",
                         )
@@ -335,21 +315,16 @@ internal object ShadeBackdropHooks {
     }
 
     private fun refreshAllOwners() {
-        refreshRole(null)
-    }
-
-    private fun refreshRole(onlyRole: PanelRole?) {
         val setColors = cachedSetColorsMethod ?: return
         val viewField = cachedBlendViewField ?: return
         val recipeField = cachedBlendRecipeField ?: return
         val ratioField = cachedBlendRatioField ?: return
         val enabledField = cachedBlendEnabledField ?: return
 
-        val snapshot = synchronized(ownerRoles) { ownerRoles.entries.map { it.key to it.value } }
+        val snapshot = synchronized(ownerRoles) { ownerRoles.keys.toList() }
         replaying.set(true)
         try {
-            for ((owner, role) in snapshot) {
-                if (onlyRole != null && role != onlyRole) continue
+            for (owner in snapshot) {
                 runCatching {
                     val enabled = enabledField.getBoolean(owner)
                     val view = viewField.get(owner) as? View ?: return@runCatching

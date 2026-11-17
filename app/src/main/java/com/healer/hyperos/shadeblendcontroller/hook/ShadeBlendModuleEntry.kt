@@ -59,7 +59,6 @@ class ShadeBlendModuleEntry : XposedModule() {
         // unavailable at PackageLoaded are safely retried at PackageReady.
         ShadeBackdropHooks.install(this, loader)
         ShadeWindowDimHooks.install(this, loader)
-        ActivePanelTracker.install(this, loader)
     }
 
     private fun logPluginHeartbeat(phase: String) {

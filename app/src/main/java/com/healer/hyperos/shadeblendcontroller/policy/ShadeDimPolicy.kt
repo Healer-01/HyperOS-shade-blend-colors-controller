@@ -4,12 +4,10 @@ import kotlin.math.roundToInt
 
 /**
  * Pure color and blend-recipe math for HyperOS 4 shade backdrops.
- * Kept free of Android framework classes so JVM tests can verify every branch directly.
+ * Uses the stock overall alpha scaling strategy for blend arrays and keeps
+ * Android framework classes out so JVM unit tests can verify every branch directly.
  */
 object ShadeDimPolicy {
-    /** SkBlendMode::kSrcOver in Android / Xiaomi libhwui native blend arrays. */
-    const val BLEND_MODE_SRC_OVER = 3
-
     /** Stock HyperOS 4 soft-light (bionics) array: shade_blend_colors_bionics. */
     val STOCK_BIONICS_BLEND_COLORS = intArrayOf(
         0xFF999999.toInt(), 21,
@@ -20,13 +18,6 @@ object ShadeDimPolicy {
     val STOCK_CLASSIC_BLEND_COLORS = intArrayOf(
         0x52808080, 28,
     )
-
-    /**
-     * Saturation-only blend modes verified in libhwui:
-     * 26 = mi_blend_saturation, 201 = adjust_saturation.
-     * Mode 106 remaps Lab lightness (r/g bounds) and therefore adds stock darkness if retained.
-     */
-    fun preservesSaturation(mode: Int): Boolean = mode == 26 || mode == 201
 
     fun normalizePercent(percent: Float, fallback: Float = DimSettings.DEFAULT_DIM_PERCENT): Float {
         if (!percent.isFinite()) return fallback
@@ -47,47 +38,15 @@ object ShadeDimPolicy {
         return (color and 0x00FFFFFF) or (scaledAlpha shl 24)
     }
 
+    /**
+     * Keep the system recipe's blend modes (e.g. 21 + 106 for bionics or 28 for classic)
+     * and scale each color entry's alpha channel proportionally by [dimPercent].
+     */
     fun buildBlendColors(
         original: IntArray?,
         dimPercent: Float,
-        strategy: DimStrategy,
-        singleEntryTarget: SingleEntryTarget = SingleEntryTarget.BIONICS_LIGHTNESS_106,
     ): IntArray {
         val normalized = normalizePercent(dimPercent)
-        return when (strategy) {
-            DimStrategy.LINEAR_SCRIM -> buildLinearScrim(original, normalized)
-            DimStrategy.SCALE_STOCK_ALPHA -> buildScaledStock(original, normalized)
-            DimStrategy.SINGLE_STOCK_ENTRY -> buildSingleStockEntry(original, normalized, singleEntryTarget)
-        }
-    }
-
-    private fun buildLinearScrim(original: IntArray?, dimPercent: Float): IntArray {
-        var retained = 0
-        if (original != null) {
-            var i = 0
-            while (i + 1 < original.size) {
-                if (preservesSaturation(original[i + 1])) retained += 2
-                i += 2
-            }
-        }
-        val result = IntArray(retained + 2)
-        var next = 0
-        if (original != null) {
-            var i = 0
-            while (i + 1 < original.size) {
-                if (preservesSaturation(original[i + 1])) {
-                    result[next++] = original[i]
-                    result[next++] = original[i + 1]
-                }
-                i += 2
-            }
-        }
-        result[next] = blackScrimColor(dimPercent, 1f)
-        result[next + 1] = BLEND_MODE_SRC_OVER
-        return result
-    }
-
-    private fun buildScaledStock(original: IntArray?, dimPercent: Float): IntArray {
         val source = if (original != null && original.size >= 2) {
             original
         } else {
@@ -97,52 +56,9 @@ object ShadeDimPolicy {
         val result = IntArray(pairCount * 2)
         for (pair in 0 until pairCount) {
             val idx = pair * 2
-            result[idx] = scaleColorAlpha(source[idx], dimPercent)
+            result[idx] = scaleColorAlpha(source[idx], normalized)
             result[idx + 1] = source[idx + 1]
         }
-        return result
-    }
-
-    private fun buildSingleStockEntry(
-        original: IntArray?,
-        dimPercent: Float,
-        target: SingleEntryTarget,
-    ): IntArray {
-        val source = if (original != null && original.size >= 2) {
-            original
-        } else {
-            STOCK_BIONICS_BLEND_COLORS
-        }
-        val pairCount = source.size / 2
-        val result = IntArray(pairCount * 2)
-        for (pair in 0 until pairCount) {
-            val idx = pair * 2
-            result[idx] = source[idx]
-            result[idx + 1] = source[idx + 1]
-        }
-
-        var targetColorIndex = -1
-        for (pair in 0 until pairCount) {
-            val idx = pair * 2
-            if (source[idx + 1] == target.mode) {
-                targetColorIndex = idx
-                break
-            }
-        }
-        if (targetColorIndex < 0) {
-            for (pair in 0 until pairCount) {
-                val idx = pair * 2
-                if (!preservesSaturation(source[idx + 1])) {
-                    targetColorIndex = idx
-                    break
-                }
-            }
-        }
-        if (targetColorIndex < 0) {
-            targetColorIndex = 0
-        }
-
-        result[targetColorIndex] = scaleColorAlpha(source[targetColorIndex], dimPercent)
         return result
     }
 
@@ -157,41 +73,6 @@ object ShadeDimPolicy {
             0f
         }
         return blackScrimColor(dimPercent, ratio)
-    }
-
-    fun resolveDimPercent(
-        settings: DimSettings,
-        role: PanelRole,
-        panelState: ActivePanelState,
-    ): Float {
-        if (settings.controlMode == ControlMode.UNIFIED) {
-            return normalizePercent(settings.unifiedDimPercent)
-        }
-        val cc = normalizePercent(settings.controlCenterDimPercent)
-        val notif = normalizePercent(settings.notificationShadeDimPercent)
-        return when (role) {
-            PanelRole.CONTROL_CENTER -> cc
-            PanelRole.NOTIFICATION_SHADE -> notif
-            PanelRole.COMBINED_WINDOW -> {
-                if (panelState.switching) {
-                    val t = if (panelState.switchFraction.isFinite()) {
-                        panelState.switchFraction.coerceIn(0f, 1f)
-                    } else {
-                        1f
-                    }
-                    // ShadeSwitchControllerImpl: 0f = Control Center, 1f = Notification Center.
-                    cc + (notif - cc) * t
-                } else if (panelState.controlCenterVisible && !panelState.notificationVisible) {
-                    cc
-                } else if (panelState.notificationVisible && !panelState.controlCenterVisible) {
-                    notif
-                } else if (panelState.lastPanel == PanelRole.CONTROL_CENTER) {
-                    cc
-                } else {
-                    notif
-                }
-            }
-        }
     }
 
     fun formatRecipeHex(colors: IntArray?): String {
