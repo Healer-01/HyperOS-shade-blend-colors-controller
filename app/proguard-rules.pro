@@ -1,0 +1,4 @@
+-keep class com.healer.hyperos.shadeblendcontroller.hook.** { *; }
+-keep class com.healer.hyperos.shadeblendcontroller.policy.** { *; }
+-keep class io.github.libxposed.** { *; }
+-dontwarn io.github.libxposed.**
