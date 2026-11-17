@@ -44,7 +44,7 @@ adb shell dumpsys activity service com.android.systemui/.SystemUIService ShadeBl
   ```bash
   ./gradlew testDebugUnitTest assembleDebug assembleRelease
   ```
-- **GitHub Actions**：工作流位于 `.github/workflows/build.yml`，推送至 `main` 分支后自动执行单元测试并构建 APK（Artifact：`HyperOS-Shade-Blend-Controller-debug`）。
+- **GitHub Actions**：工作流位于 `.github/workflows/build.yml`，推送至 `main` 分支或推送 `v*` 标签后自动执行单元测试并构建签名 Release APK（标签推送将自动发布对应版本的 GitHub Release，产物包含 Debug 与已签名 R8 压缩 Release APK）。
 
 ## 引用与开源许可
 
