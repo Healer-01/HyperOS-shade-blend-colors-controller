@@ -177,6 +177,7 @@ internal object ShadeBackdropHooks {
                             original = originalColors,
                             dimPercent = dimPercent,
                             strategy = settings.dimStrategy,
+                            singleEntryTarget = settings.singleEntryTarget,
                         )
 
                         compatCalls.incrementAndGet()
@@ -244,6 +245,7 @@ internal object ShadeBackdropHooks {
                             "  ShadeBlendController: enabled=${settings.enabled}" +
                                 ", mode=${settings.controlMode}" +
                                 ", strategy=${settings.dimStrategy}" +
+                                ", singleEntry=${settings.singleEntryTarget}" +
                                 ", unified=${settings.unifiedDimPercent}%" +
                                 ", cc=${settings.controlCenterDimPercent}%" +
                                 ", notif=${settings.notificationShadeDimPercent}%" +

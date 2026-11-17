@@ -51,11 +51,13 @@ object ShadeDimPolicy {
         original: IntArray?,
         dimPercent: Float,
         strategy: DimStrategy,
+        singleEntryTarget: SingleEntryTarget = SingleEntryTarget.BIONICS_LIGHTNESS_106,
     ): IntArray {
         val normalized = normalizePercent(dimPercent)
         return when (strategy) {
             DimStrategy.LINEAR_SCRIM -> buildLinearScrim(original, normalized)
             DimStrategy.SCALE_STOCK_ALPHA -> buildScaledStock(original, normalized)
+            DimStrategy.SINGLE_STOCK_ENTRY -> buildSingleStockEntry(original, normalized, singleEntryTarget)
         }
     }
 
@@ -98,6 +100,49 @@ object ShadeDimPolicy {
             result[idx] = scaleColorAlpha(source[idx], dimPercent)
             result[idx + 1] = source[idx + 1]
         }
+        return result
+    }
+
+    private fun buildSingleStockEntry(
+        original: IntArray?,
+        dimPercent: Float,
+        target: SingleEntryTarget,
+    ): IntArray {
+        val source = if (original != null && original.size >= 2) {
+            original
+        } else {
+            STOCK_BIONICS_BLEND_COLORS
+        }
+        val pairCount = source.size / 2
+        val result = IntArray(pairCount * 2)
+        for (pair in 0 until pairCount) {
+            val idx = pair * 2
+            result[idx] = source[idx]
+            result[idx + 1] = source[idx + 1]
+        }
+
+        var targetColorIndex = -1
+        for (pair in 0 until pairCount) {
+            val idx = pair * 2
+            if (source[idx + 1] == target.mode) {
+                targetColorIndex = idx
+                break
+            }
+        }
+        if (targetColorIndex < 0) {
+            for (pair in 0 until pairCount) {
+                val idx = pair * 2
+                if (!preservesSaturation(source[idx + 1])) {
+                    targetColorIndex = idx
+                    break
+                }
+            }
+        }
+        if (targetColorIndex < 0) {
+            targetColorIndex = 0
+        }
+
+        result[targetColorIndex] = scaleColorAlpha(source[targetColorIndex], dimPercent)
         return result
     }
 

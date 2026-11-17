@@ -23,11 +23,31 @@ enum class DimStrategy {
      * Keep the system recipe's blend modes (e.g. 21 + 106 for bionics or 28 for classic)
      * and scale each color entry's alpha channel proportionally by dimPercent.
      */
-    SCALE_STOCK_ALPHA;
+    SCALE_STOCK_ALPHA,
+
+    /**
+     * Keep the stock recipe array intact and scale ONLY one chosen entry's alpha channel
+     * (either mode 106 Lab lightness compression or mode 21 neutral gray tint),
+     * leaving all other stock entries completely untouched.
+     */
+    SINGLE_STOCK_ENTRY;
 
     companion object {
         fun fromStorage(value: String?): DimStrategy =
             entries.firstOrNull { it.name == value } ?: LINEAR_SCRIM
+    }
+}
+
+enum class SingleEntryTarget(val mode: Int) {
+    /** Entry 1 in shade_blend_colors_bionics: #FF0D8000 (mode 106 Lab lightness compression). */
+    BIONICS_LIGHTNESS_106(106),
+
+    /** Entry 0 in shade_blend_colors_bionics: #FF999999 (mode 21 neutral gray tint). */
+    BIONICS_TINT_21(21);
+
+    companion object {
+        fun fromStorage(value: String?): SingleEntryTarget =
+            entries.firstOrNull { it.name == value } ?: BIONICS_LIGHTNESS_106
     }
 }
 
@@ -49,6 +69,7 @@ data class DimSettings(
     val enabled: Boolean = true,
     val controlMode: ControlMode = ControlMode.UNIFIED,
     val dimStrategy: DimStrategy = DimStrategy.LINEAR_SCRIM,
+    val singleEntryTarget: SingleEntryTarget = SingleEntryTarget.BIONICS_LIGHTNESS_106,
     val unifiedDimPercent: Float = DEFAULT_DIM_PERCENT,
     val controlCenterDimPercent: Float = DEFAULT_DIM_PERCENT,
     val notificationShadeDimPercent: Float = DEFAULT_DIM_PERCENT,
@@ -70,6 +91,7 @@ object SettingsContract {
     const val KEY_ENABLED = "enabled"
     const val KEY_CONTROL_MODE = "control_mode"
     const val KEY_DIM_STRATEGY = "dim_strategy"
+    const val KEY_SINGLE_ENTRY_TARGET = "single_entry_target"
     const val KEY_UNIFIED_DIM_PERCENT = "unified_dim_percent"
     const val KEY_CONTROL_CENTER_DIM_PERCENT = "control_center_dim_percent"
     const val KEY_NOTIFICATION_SHADE_DIM_PERCENT = "notification_shade_dim_percent"
@@ -78,6 +100,7 @@ object SettingsContract {
         enabled = prefs.getBoolean(KEY_ENABLED, true),
         controlMode = ControlMode.fromStorage(prefs.getString(KEY_CONTROL_MODE, null)),
         dimStrategy = DimStrategy.fromStorage(prefs.getString(KEY_DIM_STRATEGY, null)),
+        singleEntryTarget = SingleEntryTarget.fromStorage(prefs.getString(KEY_SINGLE_ENTRY_TARGET, null)),
         unifiedDimPercent = prefs.getFloat(KEY_UNIFIED_DIM_PERCENT, DimSettings.DEFAULT_DIM_PERCENT),
         controlCenterDimPercent = prefs.getFloat(KEY_CONTROL_CENTER_DIM_PERCENT, DimSettings.DEFAULT_DIM_PERCENT),
         notificationShadeDimPercent = prefs.getFloat(KEY_NOTIFICATION_SHADE_DIM_PERCENT, DimSettings.DEFAULT_DIM_PERCENT),
@@ -89,6 +112,7 @@ object SettingsContract {
             .putBoolean(KEY_ENABLED, clean.enabled)
             .putString(KEY_CONTROL_MODE, clean.controlMode.name)
             .putString(KEY_DIM_STRATEGY, clean.dimStrategy.name)
+            .putString(KEY_SINGLE_ENTRY_TARGET, clean.singleEntryTarget.name)
             .putFloat(KEY_UNIFIED_DIM_PERCENT, clean.unifiedDimPercent)
             .putFloat(KEY_CONTROL_CENTER_DIM_PERCENT, clean.controlCenterDimPercent)
             .putFloat(KEY_NOTIFICATION_SHADE_DIM_PERCENT, clean.notificationShadeDimPercent)

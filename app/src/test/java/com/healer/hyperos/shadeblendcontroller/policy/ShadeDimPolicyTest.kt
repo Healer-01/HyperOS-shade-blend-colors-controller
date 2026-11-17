@@ -116,4 +116,73 @@ class ShadeDimPolicyTest {
         assertEquals("[#33000000 (mode 3)]", ShadeDimPolicy.formatRecipeHex(recipe))
         assertEquals("[]", ShadeDimPolicy.formatRecipeHex(null))
     }
+
+    @Test
+    fun singleStockEntryScalesOnlyChosenBionicsLayerAndLeavesOtherUntouched() {
+        val stock = ShadeDimPolicy.STOCK_BIONICS_BLEND_COLORS
+
+        val lower106 = ShadeDimPolicy.buildBlendColors(
+            original = stock,
+            dimPercent = 20f,
+            strategy = DimStrategy.SINGLE_STOCK_ENTRY,
+            singleEntryTarget = SingleEntryTarget.BIONICS_LIGHTNESS_106,
+        )
+        assertArrayEquals(
+            intArrayOf(0xFF999999.toInt(), 21, 0x330D8000, 106),
+            lower106,
+        )
+
+        val lower21 = ShadeDimPolicy.buildBlendColors(
+            original = stock,
+            dimPercent = 20f,
+            strategy = DimStrategy.SINGLE_STOCK_ENTRY,
+            singleEntryTarget = SingleEntryTarget.BIONICS_TINT_21,
+        )
+        assertArrayEquals(
+            intArrayOf(0x33999999, 21, 0xFF0D8000.toInt(), 106),
+            lower21,
+        )
+
+        // Stock constant must remain untouched
+        assertArrayEquals(intArrayOf(0xFF999999.toInt(), 21, 0xFF0D8000.toInt(), 106), stock)
+    }
+
+    @Test
+    fun singleStockEntryFallsBackToFirstNonSaturationPairWhenTargetModeAbsent() {
+        val withSaturation = intArrayOf(
+            0xFF808080.toInt(), 26,
+            0x52808080, 28,
+        )
+        val result = ShadeDimPolicy.buildBlendColors(
+            original = withSaturation,
+            dimPercent = 50f,
+            strategy = DimStrategy.SINGLE_STOCK_ENTRY,
+            singleEntryTarget = SingleEntryTarget.BIONICS_LIGHTNESS_106,
+        )
+        assertArrayEquals(intArrayOf(0xFF808080.toInt(), 26, 0x29808080, 28), result)
+    }
+
+    @Test
+    fun singleStockEntryHandlesNullRecipeBoundariesAndStorageParsing() {
+        val fallbackZero = ShadeDimPolicy.buildBlendColors(
+            original = null,
+            dimPercent = 0f,
+            strategy = DimStrategy.SINGLE_STOCK_ENTRY,
+            singleEntryTarget = SingleEntryTarget.BIONICS_LIGHTNESS_106,
+        )
+        assertArrayEquals(intArrayOf(0xFF999999.toInt(), 21, 0x000D8000, 106), fallbackZero)
+
+        val fallbackHundred = ShadeDimPolicy.buildBlendColors(
+            original = null,
+            dimPercent = 100f,
+            strategy = DimStrategy.SINGLE_STOCK_ENTRY,
+            singleEntryTarget = SingleEntryTarget.BIONICS_TINT_21,
+        )
+        assertArrayEquals(intArrayOf(0xFF999999.toInt(), 21, 0xFF0D8000.toInt(), 106), fallbackHundred)
+
+        assertEquals(DimStrategy.SINGLE_STOCK_ENTRY, DimStrategy.fromStorage("SINGLE_STOCK_ENTRY"))
+        assertEquals(DimStrategy.LINEAR_SCRIM, DimStrategy.fromStorage("UNKNOWN_VALUE"))
+        assertEquals(SingleEntryTarget.BIONICS_TINT_21, SingleEntryTarget.fromStorage("BIONICS_TINT_21"))
+        assertEquals(SingleEntryTarget.BIONICS_LIGHTNESS_106, SingleEntryTarget.fromStorage(null))
+    }
 }

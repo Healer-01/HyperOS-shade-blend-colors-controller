@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -50,12 +51,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.healer.hyperos.shadeblendcontroller.hook.ShadeBlendModuleEntry
 import com.healer.hyperos.shadeblendcontroller.policy.ControlMode
 import com.healer.hyperos.shadeblendcontroller.policy.DimSettings
 import com.healer.hyperos.shadeblendcontroller.policy.DimStrategy
 import com.healer.hyperos.shadeblendcontroller.policy.ShadeDimPolicy
+import com.healer.hyperos.shadeblendcontroller.policy.SingleEntryTarget
 import kotlin.math.roundToInt
 
 private const val DUMPSYS_COMMAND =
@@ -109,6 +113,9 @@ fun ShadeDimScreen() {
                 onStrategyChange = { strategy ->
                     SettingsRepository.update { it.copy(dimStrategy = strategy) }
                 },
+                onSingleEntryTargetChange = { target ->
+                    SettingsRepository.update { it.copy(singleEntryTarget = target) }
+                },
             )
 
             if (settings.controlMode == ControlMode.UNIFIED) {
@@ -117,6 +124,7 @@ fun ShadeDimScreen() {
                     subtitle = "同时作用于下拉控制中心、通知中心及合二为一背景",
                     percent = settings.unifiedDimPercent,
                     strategy = settings.dimStrategy,
+                    singleEntryTarget = settings.singleEntryTarget,
                     enabled = settings.enabled,
                     onPercentChange = { value ->
                         SettingsRepository.update { it.copy(unifiedDimPercent = value) }
@@ -128,6 +136,7 @@ fun ShadeDimScreen() {
                     subtitle = "右侧下拉控制中心独立压暗（0% 最通透，100% 纯黑）",
                     percent = settings.controlCenterDimPercent,
                     strategy = settings.dimStrategy,
+                    singleEntryTarget = settings.singleEntryTarget,
                     enabled = settings.enabled,
                     onPercentChange = { value ->
                         SettingsRepository.update { it.copy(controlCenterDimPercent = value) }
@@ -138,6 +147,7 @@ fun ShadeDimScreen() {
                     subtitle = "左侧下拉通知中心独立压暗（0% 最通透，100% 纯黑）",
                     percent = settings.notificationShadeDimPercent,
                     strategy = settings.dimStrategy,
+                    singleEntryTarget = settings.singleEntryTarget,
                     enabled = settings.enabled,
                     onPercentChange = { value ->
                         SettingsRepository.update { it.copy(notificationShadeDimPercent = value) }
@@ -254,6 +264,7 @@ private fun MasterControlCard(
     onToggleEnabled: (Boolean) -> Unit,
     onControlModeChange: (ControlMode) -> Unit,
     onStrategyChange: (DimStrategy) -> Unit,
+    onSingleEntryTargetChange: (SingleEntryTarget) -> Unit,
 ) {
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -320,25 +331,96 @@ private fun MasterControlCard(
                     SegmentedButton(
                         selected = settings.dimStrategy == DimStrategy.LINEAR_SCRIM,
                         onClick = { onStrategyChange(DimStrategy.LINEAR_SCRIM) },
-                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                        shape = SegmentedButtonDefaults.itemShape(index = 0, count = 3),
                         enabled = settings.enabled,
                     ) {
-                        Text("纯净线性遮罩")
+                        Text(
+                            text = "线性遮罩",
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                     SegmentedButton(
                         selected = settings.dimStrategy == DimStrategy.SCALE_STOCK_ALPHA,
                         onClick = { onStrategyChange(DimStrategy.SCALE_STOCK_ALPHA) },
-                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                        shape = SegmentedButtonDefaults.itemShape(index = 1, count = 3),
                         enabled = settings.enabled,
                     ) {
-                        Text("缩放原厂配方")
+                        Text(
+                            text = "整体缩放",
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    SegmentedButton(
+                        selected = settings.dimStrategy == DimStrategy.SINGLE_STOCK_ENTRY,
+                        onClick = { onStrategyChange(DimStrategy.SINGLE_STOCK_ENTRY) },
+                        shape = SegmentedButtonDefaults.itemShape(index = 2, count = 3),
+                        enabled = settings.enabled,
+                    ) {
+                        Text(
+                            text = "原厂单项",
+                            style = MaterialTheme.typography.labelMedium,
+                            maxLines = 1,
+                            softWrap = false,
+                            overflow = TextOverflow.Ellipsis,
+                        )
                     }
                 }
+
+                if (settings.dimStrategy == DimStrategy.SINGLE_STOCK_ENTRY) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "选择要调低的原厂单项",
+                        style = MaterialTheme.typography.labelMedium,
+                    )
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = settings.singleEntryTarget == SingleEntryTarget.BIONICS_LIGHTNESS_106,
+                            onClick = { onSingleEntryTargetChange(SingleEntryTarget.BIONICS_LIGHTNESS_106) },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                            enabled = settings.enabled,
+                        ) {
+                            Text(
+                                text = "亮度层 106",
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        SegmentedButton(
+                            selected = settings.singleEntryTarget == SingleEntryTarget.BIONICS_TINT_21,
+                            onClick = { onSingleEntryTargetChange(SingleEntryTarget.BIONICS_TINT_21) },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                            enabled = settings.enabled,
+                        ) {
+                            Text(
+                                text = "灰阶层 21",
+                                style = MaterialTheme.typography.labelMedium,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                }
+
                 Text(
-                    text = if (settings.dimStrategy == DimStrategy.LINEAR_SCRIM) {
-                        "移除原厂 mode 106 Lab 亮度压缩，改用线性 SrcOver 黑遮罩，0% 时背景完全通透不发灰。"
-                    } else {
-                        "保留原厂 shade_blend_colors_bionics (21/106) 或经典 (28) 混合模式，仅按百分比缩放各层 Alpha 通道。"
+                    text = when (settings.dimStrategy) {
+                        DimStrategy.LINEAR_SCRIM ->
+                            "移除原厂 mode 106 Lab 亮度压缩，改用线性 SrcOver 黑遮罩，0% 时背景完全通透不发灰。"
+                        DimStrategy.SCALE_STOCK_ALPHA ->
+                            "保留原厂 shade_blend_colors_bionics (21/106) 或经典 (28) 混合模式，按百分比同步缩放所有色层 Alpha。"
+                        DimStrategy.SINGLE_STOCK_ENTRY -> if (settings.singleEntryTarget == SingleEntryTarget.BIONICS_LIGHTNESS_106) {
+                            "保留原厂第 1 项 #FF999999 (mode 21) 不变，仅调低第 2 项 #XX0D8000 (mode 106) 的压暗强度，最小改动让背景变亮。"
+                        } else {
+                            "保留原厂第 2 项 #FF0D8000 (mode 106) 不变，仅调低第 1 项 #XX999999 (mode 21) 的灰阶叠色透明度。"
+                        }
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -355,6 +437,7 @@ private fun DimSliderCard(
     subtitle: String,
     percent: Float,
     strategy: DimStrategy,
+    singleEntryTarget: SingleEntryTarget,
     enabled: Boolean,
     onPercentChange: (Float) -> Unit,
 ) {
@@ -363,8 +446,14 @@ private fun DimSliderCard(
         original = ShadeDimPolicy.STOCK_BIONICS_BLEND_COLORS,
         dimPercent = percent,
         strategy = strategy,
+        singleEntryTarget = singleEntryTarget,
     )
     val scrimAlpha = ((ShadeDimPolicy.blackScrimColor(percent) ushr 24) and 0xFF) / 255f
+    val previewOverlayAlpha = when (strategy) {
+        DimStrategy.LINEAR_SCRIM -> scrimAlpha
+        DimStrategy.SCALE_STOCK_ALPHA -> scrimAlpha * 0.75f
+        DimStrategy.SINGLE_STOCK_ENTRY -> 0.18f + scrimAlpha * 0.55f
+    }
 
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(
@@ -404,7 +493,7 @@ private fun DimSliderCard(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(28.dp)
+                    .heightIn(min = 44.dp)
                     .clip(RoundedCornerShape(8.dp))
                     .background(
                         Brush.horizontalGradient(
@@ -424,14 +513,16 @@ private fun DimSliderCard(
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = if (enabled) scrimAlpha else 0.5f)),
+                        .matchParentSize()
+                        .background(Color.Black.copy(alpha = if (enabled) previewOverlayAlpha else 0.5f)),
                 )
                 Text(
                     text = if (enabled) "等效配方：${ShadeDimPolicy.formatRecipeHex(previewRecipe)}" else "已关闭（系统默认）",
                     style = MaterialTheme.typography.labelSmall,
                     fontFamily = FontFamily.Monospace,
                     color = Color.White,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                 )
             }
 
