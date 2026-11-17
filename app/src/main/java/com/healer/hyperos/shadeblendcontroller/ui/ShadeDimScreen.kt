@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,7 +35,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -47,7 +53,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.healer.hyperos.shadeblendcontroller.hook.ShadeBlendModuleEntry
@@ -277,11 +283,6 @@ private fun UnifiedDimControlCard(
 ) {
     val normalized = ShadeDimPolicy.normalizePercent(dimPercent)
     val rounded = normalized.roundToInt()
-    val previewRecipe = ShadeDimPolicy.buildBlendColors(
-        original = ShadeDimPolicy.STOCK_BIONICS_BLEND_COLORS,
-        dimPercent = normalized,
-    )
-    val previewOverlayAlpha = 0.78f * (normalized / 100f)
 
     Card(modifier = Modifier.padding(horizontal = 12.dp)) {
         SuperSwitch(
@@ -334,47 +335,11 @@ private fun UnifiedDimControlCard(
                 )
             }
 
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(
-                        Brush.horizontalGradient(
-                            listOf(
-                                Color(0xFF4F8DFD),
-                                Color(0xFF7B61FF),
-                                Color(0xFFEC7A9B),
-                            ),
-                        ),
-                    )
-                    .border(
-                        width = 0.75.dp,
-                        color = MiuixTheme.colorScheme.outline,
-                        shape = RoundedCornerShape(12.dp),
-                    ),
-                contentAlignment = Alignment.Center,
-            ) {
-                Box(
-                    modifier = Modifier
-                        .matchParentSize()
-                        .background(
-                            Color.Black.copy(alpha = if (enabled) previewOverlayAlpha else 0.5f),
-                        ),
-                )
-                Text(
-                    text = if (enabled) {
-                        "等效配方：${ShadeDimPolicy.formatRecipeHex(previewRecipe)}"
-                    } else {
-                        "已关闭（系统默认）"
-                    },
-                    style = MiuixTheme.textStyles.footnote2,
-                    fontFamily = FontFamily.Monospace,
-                    color = Color.White,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
-                )
-            }
+            NotificationShadePreview(
+                enabled = enabled,
+                dimPercent = normalized,
+                roundedPercent = rounded,
+            )
 
             Slider(
                 value = normalized,
@@ -425,6 +390,238 @@ private fun UnifiedDimControlCard(
                     }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Simulated HyperOS Notification Center backdrop preview showing how the current dim percentage
+ * darkens the blurred home-screen wallpaper behind crisp notification cards.
+ */
+@Composable
+private fun NotificationShadePreview(
+    enabled: Boolean,
+    dimPercent: Float,
+    roundedPercent: Int,
+) {
+    // Stock overall scaling darkens the blurred desktop wallpaper up to full stock dim (~72% scrim).
+    val effectivePercent = if (enabled) dimPercent else 100f
+    val dimAlpha = (0.72f * (effectivePercent / 100f)).coerceIn(0f, 0.72f)
+    val neutralTintAlpha = (0.12f * (effectivePercent / 100f)).coerceIn(0f, 0.12f)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(min = 182.dp)
+            .clip(RoundedCornerShape(16.dp))
+            .border(
+                width = 0.75.dp,
+                color = MiuixTheme.colorScheme.outline,
+                shape = RoundedCornerShape(16.dp),
+            ),
+    ) {
+        // 1) Blurred simulated HyperOS desktop wallpaper + app icon silhouettes
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .blur(radius = 14.dp, edgeTreatment = BlurredEdgeTreatment.Rectangle),
+        ) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                drawRect(
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            Color(0xFF4478F5),
+                            Color(0xFF7B66EE),
+                            Color(0xFFDF74A5),
+                            Color(0xFFF5AD79),
+                        ),
+                        start = Offset.Zero,
+                        end = Offset(size.width, size.height),
+                    ),
+                )
+                drawCircle(
+                    color = Color(0xFF8BE2F5).copy(alpha = 0.55f),
+                    radius = size.minDimension * 0.42f,
+                    center = Offset(size.width * 0.18f, size.height * 0.28f),
+                )
+                drawCircle(
+                    color = Color(0xFFFFD38B).copy(alpha = 0.50f),
+                    radius = size.minDimension * 0.48f,
+                    center = Offset(size.width * 0.84f, size.height * 0.78f),
+                )
+                val iconColors = listOf(
+                    Color(0xFF4CD964),
+                    Color(0xFF5AC8FA),
+                    Color(0xFFFF9500),
+                    Color(0xFFFF3B30),
+                )
+                val iconSize = size.minDimension * 0.17f
+                val gap = size.width * 0.07f
+                val startX = (size.width - (iconColors.size * iconSize + (iconColors.size - 1) * gap)) / 2f
+                val y = size.height * 0.70f
+                iconColors.forEachIndexed { index, color ->
+                    drawRoundRect(
+                        color = color.copy(alpha = 0.78f),
+                        topLeft = Offset(startX + index * (iconSize + gap), y),
+                        size = Size(iconSize, iconSize),
+                        cornerRadius = CornerRadius(iconSize * 0.28f, iconSize * 0.28f),
+                    )
+                }
+            }
+        }
+
+        // 2) Live background dim overlay driven by the unified dim slider
+        Box(
+            modifier = Modifier
+                .matchParentSize()
+                .background(Color(0xFF14161A).copy(alpha = neutralTintAlpha))
+                .background(Color.Black.copy(alpha = dimAlpha)),
+        )
+
+        // 3) Foreground HyperOS Notification Center clock & translucent cards
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.Bottom,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    Text(
+                        text = "09:41",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White,
+                    )
+                    Text(
+                        text = "11月17日 周二",
+                        fontSize = 11.sp,
+                        color = Color.White.copy(alpha = 0.84f),
+                        modifier = Modifier.padding(bottom = 2.dp),
+                    )
+                }
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(50))
+                        .background(Color.White.copy(alpha = 0.16f))
+                        .padding(horizontal = 8.dp, vertical = 3.dp),
+                ) {
+                    Text(
+                        text = if (enabled) "通知中心 · $roundedPercent%" else "已关闭 · 系统默认",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White,
+                    )
+                }
+            }
+
+            PreviewNotificationItem(
+                badgeColor = Color(0xFF3482FF),
+                appName = "系统界面",
+                message = "通知中心背景压暗实时预览（0% 最通透，100% 原厂暗度）",
+                timeLabel = "刚刚",
+                cardAlpha = 0.18f,
+            )
+
+            PreviewNotificationItem(
+                badgeColor = Color(0xFF28B463),
+                appName = "消息通知",
+                message = "拖动下方滑块即可直观对比文字与壁纸的通透对比度",
+                timeLabel = "2分钟前",
+                cardAlpha = 0.14f,
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 2.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(34.dp)
+                        .height(3.5.dp)
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.55f)),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PreviewNotificationItem(
+    badgeColor: Color,
+    appName: String,
+    message: String,
+    timeLabel: String,
+    cardAlpha: Float,
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(Color.White.copy(alpha = cardAlpha))
+            .border(
+                width = 0.5.dp,
+                color = Color.White.copy(alpha = 0.22f),
+                shape = RoundedCornerShape(14.dp),
+            )
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(26.dp)
+                .clip(RoundedCornerShape(8.dp))
+                .background(badgeColor),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(10.dp)
+                    .clip(CircleShape)
+                    .background(Color.White.copy(alpha = 0.9f)),
+            )
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(1.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = appName,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Text(
+                    text = timeLabel,
+                    fontSize = 10.sp,
+                    color = Color.White.copy(alpha = 0.68f),
+                )
+            }
+            Text(
+                text = message,
+                fontSize = 10.5.sp,
+                color = Color.White.copy(alpha = 0.85f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
